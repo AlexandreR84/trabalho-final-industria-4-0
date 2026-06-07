@@ -8,6 +8,7 @@ Projeto academico do componente **Industria 4.0**, desenvolvido para demonstrar 
 - Raul Fernandes Silva Melo - RA 5170007
 - Bruna Duarte Bueno - RA 5161875
 - Matheus Lemes Carneiro - RA 5161892
+- Luciano Roberto Monteiro Araújo - RA 5160512
 
 ## Cenario escolhido
 
