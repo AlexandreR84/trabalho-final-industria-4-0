@@ -1,5 +1,12 @@
 # Trabalho Final - Cenario 1: Manutencao Preditiva
 
+## Integrantes
+
+- Alexandre Rezende Silva - RA 5127545
+- Raul Fernandes Silva Melo - RA 5170007
+- Bruna Duarte Bueno - RA 5161875
+- Matheus Lemes Carneiro - RA 5161892
+
 ## Problema escolhido
 
 Uma fabrica possui motores eletricos nas linhas de producao. Com o tempo, esses motores podem apresentar desgaste mecanico, desalinhamento, aquecimento ou falha em rolamentos. Esses problemas costumam aparecer primeiro como aumento de vibracao e aumento de temperatura.
@@ -70,7 +77,7 @@ Menu -> Manage palette -> Install -> node-red-dashboard
 6. Importe o arquivo:
 
 ```text
-node-red-fluxo-manutencao-preditiva.json
+node-red/fluxo-manutencao-preditiva.json
 ```
 
 7. Clique em `Deploy`.

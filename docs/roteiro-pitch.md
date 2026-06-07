@@ -1,5 +1,12 @@
 # Roteiro do pitch - 5 minutos
 
+## Integrantes
+
+- Alexandre Rezende Silva - RA 5127545
+- Raul Fernandes Silva Melo - RA 5170007
+- Bruna Duarte Bueno - RA 5161875
+- Matheus Lemes Carneiro - RA 5161892
+
 ## 1. Abertura
 
 Nosso projeto resolve um problema comum na industria: falhas inesperadas em motores eletricos das linhas de producao.

@@ -2,6 +2,13 @@
 
 Projeto academico do componente **Industria 4.0**, desenvolvido para demonstrar uma solucao de **manutencao preditiva** usando MQTT, Node-RED e dashboard em tempo real.
 
+## Integrantes
+
+- Alexandre Rezende Silva - RA 5127545
+- Raul Fernandes Silva Melo - RA 5170007
+- Bruna Duarte Bueno - RA 5161875
+- Matheus Lemes Carneiro - RA 5161892
+
 ## Cenario escolhido
 
 **Cenario 1 - Manutencao Preditiva**
@@ -120,8 +127,7 @@ Exemplo de mensagem recebida:
 `-- docs/
     |-- analise-manutencao-preditiva.md
     |-- roteiro-pitch.md
-    |-- TrabalhoFinalInd_Ostria40.pdf
-    `-- TrabalhoFinalInd_Ostria40.extracted.txt
+    `-- TrabalhoFinalInd_Ostria40.pdf
 ```
 
 ## Materiais de apresentacao
