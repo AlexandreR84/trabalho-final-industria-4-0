@@ -1,0 +1,454 @@
+[
+  {
+    "id": "tab_manutencao_preditiva",
+    "type": "tab",
+    "label": "Manutenção Preditiva",
+    "disabled": false,
+    "info": "Fluxo para o Trabalho Final de Industria 4.0: manutenção preditiva com MQTT, Node-RED e Dashboard."
+  },
+  {
+    "id": "mqtt_broker_disciplina",
+    "type": "mqtt-broker",
+    "name": "Broker MQTT Disciplina",
+    "broker": "76.13.175.168",
+    "port": "1883",
+    "clientid": "",
+    "autoConnect": true,
+    "usetls": false,
+    "protocolVersion": "4",
+    "keepalive": "60",
+    "cleansession": true,
+    "birthTopic": "",
+    "birthQos": "0",
+    "birthPayload": "",
+    "birthMsg": {},
+    "closeTopic": "",
+    "closeQos": "0",
+    "closePayload": "",
+    "closeMsg": {},
+    "willTopic": "",
+    "willQos": "0",
+    "willPayload": "",
+    "willMsg": {},
+    "sessionExpiry": ""
+  },
+  {
+    "id": "ui_tab_manutencao",
+    "type": "ui_tab",
+    "name": "Manutenção Preditiva",
+    "icon": "dashboard",
+    "disabled": false,
+    "hidden": false
+  },
+  {
+    "id": "ui_group_indicadores",
+    "type": "ui_group",
+    "name": "Indicadores em tempo real",
+    "tab": "ui_tab_manutencao",
+    "order": 1,
+    "disp": true,
+    "width": "12",
+    "collapse": false,
+    "className": ""
+  },
+  {
+    "id": "ui_group_graficos",
+    "type": "ui_group",
+    "name": "Histórico dos sensores",
+    "tab": "ui_tab_manutencao",
+    "order": 2,
+    "disp": true,
+    "width": "12",
+    "collapse": false,
+    "className": ""
+  },
+  {
+    "id": "ui_group_alerta",
+    "type": "ui_group",
+    "name": "Alerta de manutenção",
+    "tab": "ui_tab_manutencao",
+    "order": 3,
+    "disp": true,
+    "width": "12",
+    "collapse": false,
+    "className": ""
+  },
+  {
+    "id": "mqtt_in_sensores",
+    "type": "mqtt in",
+    "z": "tab_manutencao_preditiva",
+    "name": "Receber sensores",
+    "topic": "sensores/#",
+    "qos": "0",
+    "datatype": "auto-detect",
+    "broker": "mqtt_broker_disciplina",
+    "nl": false,
+    "rap": true,
+    "rh": 0,
+    "inputs": 0,
+    "x": 140,
+    "y": 120,
+    "wires": [
+      [
+        "json_converter"
+      ]
+    ]
+  },
+  {
+    "id": "json_converter",
+    "type": "json",
+    "z": "tab_manutencao_preditiva",
+    "name": "Converter JSON",
+    "property": "payload",
+    "action": "",
+    "pretty": false,
+    "x": 350,
+    "y": 120,
+    "wires": [
+      [
+        "function_processar_sensores"
+      ]
+    ]
+  },
+  {
+    "id": "function_processar_sensores",
+    "type": "function",
+    "z": "tab_manutencao_preditiva",
+    "name": "Processar indicadores e alerta",
+    "func": "const dados = msg.payload || {};\nconst linha = (msg.topic || 'sensores/linha?').split('/').pop();\n\nconst temperatura = Number(dados.temperatura);\nconst umidade = Number(dados.umidade);\nconst radiacao = Number(dados.radiacao);\nconst pressao = Number(dados.pressao);\nconst vazao = Number(dados.vazao);\nconst vibracao = Number(dados.acelerometro);\n\nconst base = {\n    linha,\n    origem: msg.topic,\n    timestamp: new Date().toISOString()\n};\n\nfunction sensorMsg(valor, topico, unidade) {\n    return {\n        topic: `${linha} - ${topico}`,\n        payload: valor,\n        unidade,\n        ...base\n    };\n}\n\nconst riscoTemperatura = temperatura > 35;\nconst riscoVibracao = vibracao > 4;\nconst emAlerta = riscoTemperatura || riscoVibracao;\n\nlet alerta = `NORMAL | ${linha} | Temperatura: ${temperatura.toFixed(1)} °C | Vibração: ${vibracao.toFixed(2)} g`;\nif (emAlerta) {\n    const motivos = [];\n    if (riscoTemperatura) motivos.push(`temperatura acima de 35 °C (${temperatura.toFixed(1)} °C)`);\n    if (riscoVibracao) motivos.push(`vibração acima de 4 g (${vibracao.toFixed(2)} g)`);\n    alerta = `ALERTA DE MANUTENÇÃO | ${linha} | ${motivos.join(' e ')}`;\n}\n\nconst alertaMsg = {\n    topic: emAlerta ? 'ALERTA' : 'NORMAL',\n    payload: alerta,\n    color: emAlerta ? 'red' : 'green',\n    ...base\n};\n\nconst toastMsg = emAlerta\n    ? { topic: 'Alerta de manutenção preditiva', payload: alerta, ...base }\n    : null;\n\nreturn [\n    sensorMsg(temperatura, 'Temperatura', '°C'),\n    sensorMsg(umidade, 'Umidade', '%'),\n    sensorMsg(radiacao, 'Radiação Solar', 'W/m²'),\n    sensorMsg(pressao, 'Pressão', 'bar'),\n    sensorMsg(vazao, 'Vazão', 'L/min'),\n    sensorMsg(vibracao, 'Vibração', 'g'),\n    sensorMsg(temperatura, 'Temperatura', '°C'),\n    sensorMsg(vibracao, 'Vibração', 'g'),\n    sensorMsg(vazao, 'Vazão', 'L/min'),\n    alertaMsg,\n    toastMsg\n];",
+    "outputs": 11,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 610,
+    "y": 120,
+    "wires": [
+      [
+        "gauge_temperatura"
+      ],
+      [
+        "gauge_umidade"
+      ],
+      [
+        "gauge_radiacao"
+      ],
+      [
+        "gauge_pressao"
+      ],
+      [
+        "gauge_vazao"
+      ],
+      [
+        "gauge_vibracao"
+      ],
+      [
+        "chart_temperatura"
+      ],
+      [
+        "chart_vibracao"
+      ],
+      [
+        "chart_vazao"
+      ],
+      [
+        "text_alerta"
+      ],
+      [
+        "toast_alerta"
+      ]
+    ]
+  },
+  {
+    "id": "gauge_temperatura",
+    "type": "ui_gauge",
+    "z": "tab_manutencao_preditiva",
+    "name": "Temperatura",
+    "group": "ui_group_indicadores",
+    "order": 1,
+    "width": 4,
+    "height": 4,
+    "gtype": "gage",
+    "title": "Temperatura",
+    "label": "°C",
+    "format": "{{value}}",
+    "min": 0,
+    "max": "60",
+    "colors": [
+      "#00b500",
+      "#e6e600",
+      "#ca3838"
+    ],
+    "seg1": "30",
+    "seg2": "35",
+    "className": ""
+  },
+  {
+    "id": "gauge_umidade",
+    "type": "ui_gauge",
+    "z": "tab_manutencao_preditiva",
+    "name": "Umidade",
+    "group": "ui_group_indicadores",
+    "order": 2,
+    "width": 4,
+    "height": 4,
+    "gtype": "gage",
+    "title": "Umidade",
+    "label": "%",
+    "format": "{{value}}",
+    "min": 0,
+    "max": "100",
+    "colors": [
+      "#00b500",
+      "#e6e600",
+      "#ca3838"
+    ],
+    "seg1": "70",
+    "seg2": "80",
+    "className": ""
+  },
+  {
+    "id": "gauge_radiacao",
+    "type": "ui_gauge",
+    "z": "tab_manutencao_preditiva",
+    "name": "Radiação Solar",
+    "group": "ui_group_indicadores",
+    "order": 3,
+    "width": 4,
+    "height": 4,
+    "gtype": "gage",
+    "title": "Radiação Solar",
+    "label": "W/m²",
+    "format": "{{value}}",
+    "min": 0,
+    "max": "1200",
+    "colors": [
+      "#00b500",
+      "#e6e600",
+      "#ca3838"
+    ],
+    "seg1": "700",
+    "seg2": "1000",
+    "className": ""
+  },
+  {
+    "id": "gauge_pressao",
+    "type": "ui_gauge",
+    "z": "tab_manutencao_preditiva",
+    "name": "Pressão",
+    "group": "ui_group_indicadores",
+    "order": 4,
+    "width": 4,
+    "height": 4,
+    "gtype": "gage",
+    "title": "Pressão",
+    "label": "bar",
+    "format": "{{value}}",
+    "min": 0,
+    "max": "10",
+    "colors": [
+      "#00b500",
+      "#e6e600",
+      "#ca3838"
+    ],
+    "seg1": "6",
+    "seg2": "8",
+    "className": ""
+  },
+  {
+    "id": "gauge_vazao",
+    "type": "ui_gauge",
+    "z": "tab_manutencao_preditiva",
+    "name": "Vazão",
+    "group": "ui_group_indicadores",
+    "order": 5,
+    "width": 4,
+    "height": 4,
+    "gtype": "gage",
+    "title": "Vazão",
+    "label": "L/min",
+    "format": "{{value}}",
+    "min": 0,
+    "max": "200",
+    "colors": [
+      "#00b500",
+      "#e6e600",
+      "#ca3838"
+    ],
+    "seg1": "130",
+    "seg2": "160",
+    "className": ""
+  },
+  {
+    "id": "gauge_vibracao",
+    "type": "ui_gauge",
+    "z": "tab_manutencao_preditiva",
+    "name": "Vibração",
+    "group": "ui_group_indicadores",
+    "order": 6,
+    "width": 4,
+    "height": 4,
+    "gtype": "gage",
+    "title": "Vibração",
+    "label": "g",
+    "format": "{{value}}",
+    "min": 0,
+    "max": "8",
+    "colors": [
+      "#00b500",
+      "#e6e600",
+      "#ca3838"
+    ],
+    "seg1": "3",
+    "seg2": "4",
+    "className": ""
+  },
+  {
+    "id": "chart_temperatura",
+    "type": "ui_chart",
+    "z": "tab_manutencao_preditiva",
+    "name": "Histórico Temperatura",
+    "group": "ui_group_graficos",
+    "order": 1,
+    "width": 12,
+    "height": 4,
+    "label": "Temperatura por linha",
+    "chartType": "line",
+    "legend": "true",
+    "xformat": "HH:mm:ss",
+    "interpolate": "linear",
+    "nodata": "Aguardando dados MQTT...",
+    "dot": false,
+    "ymin": "0",
+    "ymax": "60",
+    "removeOlder": 10,
+    "removeOlderPoints": "",
+    "removeOlderUnit": "60",
+    "cutout": 0,
+    "useOneColor": false,
+    "useUTC": false,
+    "colors": [
+      "#1f77b4",
+      "#ff7f0e",
+      "#2ca02c",
+      "#d62728",
+      "#9467bd",
+      "#8c564b",
+      "#e377c2",
+      "#7f7f7f",
+      "#bcbd22"
+    ],
+    "outputs": 1,
+    "className": ""
+  },
+  {
+    "id": "chart_vibracao",
+    "type": "ui_chart",
+    "z": "tab_manutencao_preditiva",
+    "name": "Histórico Vibração",
+    "group": "ui_group_graficos",
+    "order": 2,
+    "width": 12,
+    "height": 4,
+    "label": "Vibração por linha",
+    "chartType": "line",
+    "legend": "true",
+    "xformat": "HH:mm:ss",
+    "interpolate": "linear",
+    "nodata": "Aguardando dados MQTT...",
+    "dot": false,
+    "ymin": "0",
+    "ymax": "8",
+    "removeOlder": 10,
+    "removeOlderPoints": "",
+    "removeOlderUnit": "60",
+    "cutout": 0,
+    "useOneColor": false,
+    "useUTC": false,
+    "colors": [
+      "#d62728",
+      "#1f77b4",
+      "#2ca02c",
+      "#ff7f0e",
+      "#9467bd",
+      "#8c564b",
+      "#e377c2",
+      "#7f7f7f",
+      "#bcbd22"
+    ],
+    "outputs": 1,
+    "className": ""
+  },
+  {
+    "id": "chart_vazao",
+    "type": "ui_chart",
+    "z": "tab_manutencao_preditiva",
+    "name": "Histórico Vazão",
+    "group": "ui_group_graficos",
+    "order": 3,
+    "width": 12,
+    "height": 4,
+    "label": "Vazão por linha",
+    "chartType": "line",
+    "legend": "true",
+    "xformat": "HH:mm:ss",
+    "interpolate": "linear",
+    "nodata": "Aguardando dados MQTT...",
+    "dot": false,
+    "ymin": "0",
+    "ymax": "200",
+    "removeOlder": 10,
+    "removeOlderPoints": "",
+    "removeOlderUnit": "60",
+    "cutout": 0,
+    "useOneColor": false,
+    "useUTC": false,
+    "colors": [
+      "#2ca02c",
+      "#1f77b4",
+      "#ff7f0e",
+      "#d62728",
+      "#9467bd",
+      "#8c564b",
+      "#e377c2",
+      "#7f7f7f",
+      "#bcbd22"
+    ],
+    "outputs": 1,
+    "className": ""
+  },
+  {
+    "id": "text_alerta",
+    "type": "ui_text",
+    "z": "tab_manutencao_preditiva",
+    "group": "ui_group_alerta",
+    "order": 1,
+    "width": 12,
+    "height": 2,
+    "name": "Status de manutenção",
+    "label": "Status",
+    "format": "<font color=\"{{msg.color}}\"><b>{{msg.payload}}</b></font>",
+    "layout": "row-spread",
+    "className": ""
+  },
+  {
+    "id": "toast_alerta",
+    "type": "ui_toast",
+    "z": "tab_manutencao_preditiva",
+    "position": "top right",
+    "displayTime": "6",
+    "highlight": "",
+    "sendall": true,
+    "outputs": 0,
+    "ok": "OK",
+    "cancel": "",
+    "raw": false,
+    "className": "",
+    "topic": "",
+    "name": "Popup de alerta",
+    "x": 920,
+    "y": 460,
+    "wires": []
+  }
+]

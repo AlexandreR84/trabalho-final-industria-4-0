@@ -1,0 +1,277 @@
+
+
+--- PÁGINA 1 ---
+               CAMPUS UBERLÂNDIA
+CURSOS DE GRADUAÇÃO EM ENGENHARIA
+TRABALHO FINAL
+COMPONENTE: INDÚSTRIA 4.0
+PROFESSOR: Júlio Almeida Borges
+Aluno (a): ________________________________________RA: _______________
+Valor: 15,0 pts    Data: 29/06/2026     Nota: ___________
+TRABALHO FINAL – INDÚSTRIA 4.0, MQTT E DASHBOARDS INTELIGENTES
+ObjeƟvo
+Desenvolver uma solução completa de monitoramento industrial uƟlizando dados recebidos via 
+protocolo MQTT.
+Cada equipe deverá consumir os dados disponibilizados pelo servidor da disciplina, processá-los
+no Node-RED, Grafana ou outros soŌwares e criar dashboards para monitoramento e tomada 
+de decisão.
+
+
+--- PÁGINA 2 ---
+Cenário
+Uma fábrica possui cinco linhas de produção monitoradas por sensores IoT.
+Os sensores enviam dados conƟnuamente para um broker MQTT.
+Cada equipe deverá escolher um problema industrial e desenvolver uma solução baseada nos 
+dados recebidos.
+Sensores Disponíveis
+Cada linha possui os seguintes sensores:
+• Temperatura (°C)
+• Umidade (%)
+• Radiação Solar (W/m²)
+• Pressão Atmosférica (bar)
+• Vazão (L/min)
+• Acelerômetro (g)
+Broker MQTT da Disciplina
+O professor fornecerá:
+Broker MQTT:
+IP: 76.13.175.168
+Porta:
+1883
+Tópicos MQTT Disponíveis
+sensores/linha1
+sensores/linha2
+sensores/linha3
+sensores/linha4
+
+--- PÁGINA 3 ---
+sensores/linha5
+Exemplo de Mensagem Recebida
+{
+"temperatura": 28.5,
+"umidade": 65,
+"radiacao": 850,
+"pressao": 5.2,
+"vazao": 120,
+"acelerometro": 0.8
+}
+Exemplo:
+retorno:
+Etapa 1 – Conectar ao Servidor MQTT
+Dados do Servidor
+Broker MQTT
+IP: 76.13.175.168
+Porta: 1883
+Tópicos disponíveis
+sensores/linha1
+sensores/linha2
+sensores/linha3
+
+
+--- PÁGINA 4 ---
+sensores/linha4
+sensores/linha5
+ou
+sensores/#
+para receber todos os dados.
+Etapa 2 – Testar MQTT
+Instalar MosquiƩo Client.
+Windows
+Download:
+https://mosquitto.org/download/
+Abrir Prompt:
+mosquitto_sub -h 76.13.175.168 -t "sensores/#" -v
+Exemplo de retorno:
+sensores/linha1
+{
+ "temperatura":24.1,
+ "umidade":50.9,
+ "radiacao":609.4,
+ "pressao":5.5,
+ "vazao":120.7,
+ "acelerometro":2.1
+}
+Etapa 3 – Instalar Node-RED
+Windows
+Instalar NodeJS:
+https://nodejs.org
+
+--- PÁGINA 5 ---
+Instalar Node-RED:
+npm install -g --unsafe-perm node-red
+Executar:
+node-red
+Abrir:
+http://localhost:1880
+Etapa 4 – Instalar Dashboard
+Menu → Manage PaleƩe
+Instalar:
+Node-red-dashboard
+
+
+--- PÁGINA 6 ---
+Etapa 5 – Criar Fluxo MQTT
+Adicionar:
+mqtt in
+Conﬁgurar:
+Broker
+76.13.175.168
+Porta
+1883
+Topic
+sensores/#
+
+
+--- PÁGINA 7 ---
+Etapa 6 – Converter JSON
+Adicionar nó:
+JSON
+Conﬁguração:
+Converter String JSON → Objeto
+Etapa 7 – Extrair Sensores
+Criar uma função para cada variável.
+
+
+--- PÁGINA 8 ---
+Exemplo:
+Temperatura
+var dados = JSON.parse(msg.payload);
+msg.payload = dados.temperatura;
+return msg;
+(se o JSON já esƟver converƟdo)
+Umidade
+var dados = JSON.parse(msg.payload);
+msg.payload = dados.umidade;
+return msg;
+
+
+--- PÁGINA 9 ---
+Pressão
+var dados = JSON.parse(msg.payload);
+msg.payload = dados.pressao;
+return msg;
+Vazão
+var dados = JSON.parse(msg.payload);
+msg.payload = dados.vazao;
+return msg;
+Vibração
+var dados = JSON.parse(msg.payload);
+msg.payload = dados.acelerometro;
+return msg;
+Radiação
+var dados = JSON.parse(msg.payload);
+msg.payload = dados.radiacao;
+return msg;
+
+--- PÁGINA 10 ---
+Etapa 8 – Criar Dashboard
+Adicionar widgets:
+Gauge
+Para:
+• Temperatura
+• Umidade
+• Pressão
+• Vazão
+• Vibração
+• Radiação
+Chart
+Criar gráﬁcos históricos para:
+• Temperatura
+• Vibração
+• Vazão
+Text
+Mostrar valor instantâneo.
+Exemplo:
+Temperatura: 25.6 °C
+Etapa 9 – Acessar Dashboard
+Após Deploy:
+http://localhost:1880/ui
+Sensores Disponíveis
+Sensor Unidade
+Temperatura °C
+Umidade %
+Radiação Solar W/m²
+Pressão bar
+
+--- PÁGINA 11 ---
+Sensor Unidade
+Vazão L/min
+Vibração (Acelerômetro) g
+Cenário 1 – Manutenção PrediƟva
+Problema
+Motor elétrico apresentando desgaste.
+Sensores
+• Vibração
+• Temperatura
+Indicadores
+• Vibração acima de 4 g
+• Temperatura acima de 35°C
+Solução
+Alertar necessidade de manutenção antes da falha.
+Cenário 2 – Controle de Ambiente Industrial
+Problema
+Área de produção com condições inadequadas.
+Sensores
+• Temperatura
+• Umidade
+Indicadores
+• Temperatura > 30°C
+• Umidade > 80%
+Solução
+Acionar climaƟzação automaƟcamente.
+
+--- PÁGINA 12 ---
+Cenário 3 – Gestão de Consumo de Água
+Problema
+Desperdício em linhas hidráulicas.
+Sensores
+• Vazão
+• Pressão
+Indicadores
+• Vazão excessiva
+• Queda de pressão
+Solução
+Detectar vazamentos.
+Cenário 4 – Eﬁciência EnergéƟca
+Problema
+Equipamentos operando fora da condição ideal.
+Sensores
+• Temperatura
+• Vibração
+• Pressão
+Solução
+Reduzir consumo energéƟco.
+Cenário 5 – Sistema Solar Inteligente
+Problema
+Baixa eﬁciência energéƟca.
+Sensores
+• Radiação Solar
+• Temperatura
+
+--- PÁGINA 13 ---
+Solução
+Monitorar melhor horário para geração de energia.
+Entrega Final
+Cada grupo deverá apresentar:
+1. Problema escolhido
+Explicar qual problema industrial será resolvido.
+2. Arquitetura
+Desenhar:
+MQTT
+ ↓
+Node-RED
+ ↓
+Dashboard
+ ↓
+Tomada de decisão
+3. Dashboard
+Mínimo:
+• 6 indicadores
+• 3 gráﬁcos
+• 1 alerta
+4. Análise
+Explicar:
+• O que os dados mostram
+• Como a empresa pode uƟlizar essas informações
+• Qual beneİcio econômico a solução traz
+5. Pitch Final
+Apresentação de 5 minutos demonstrando o dashboard funcionando em tempo real.
