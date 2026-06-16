@@ -16,6 +16,8 @@ Projeto academico do componente **Industria 4.0**, desenvolvido para demonstrar 
 
 O projeto monitora motores eletricos das linhas de producao. A ideia e identificar sinais de desgaste antes da falha, analisando principalmente **temperatura** e **vibracao**.
 
+> Observacao sobre os dados: o broker da disciplina disponibiliza um fluxo de sensores genericos de ambiente. Adotamos esse fluxo como fonte de dados e definimos limiares de demonstracao para representar a condicao de um motor. A logica de processamento, alerta e visualizacao e a mesma que seria usada em sensores reais de motor.
+
 ## Arquitetura
 
 ```mermaid
@@ -31,31 +33,45 @@ flowchart TD
 - Broker: `76.13.175.168`
 - Porta: `1883`
 - Topico usado: `sensores/#`
+- Linhas monitoradas: `sensores/linha1` a `sensores/linha5`
 
 ## Regras de alerta
 
 - **Temperatura acima de 35 graus Celsius**: risco de aquecimento.
 - **Vibracao acima de 4 g**: risco de desgaste mecanico.
 
-Quando uma dessas condicoes ocorre, o dashboard exibe um alerta de manutencao preditiva.
+A avaliacao e feita **por linha**: o alerta dispara se qualquer uma das linhas ultrapassar um dos limites, e a mensagem indica qual linha e por que motivo.
 
 ## Dashboard
 
 O dashboard atende aos requisitos do trabalho:
 
 - 6 indicadores em tempo real:
-  - Temperatura
-  - Umidade
-  - Radiacao Solar
-  - Pressao
-  - Vazao
-  - Vibracao
-- 3 graficos historicos:
+  - Temperatura (pior caso entre as linhas - valor maximo)
+  - Umidade (media das linhas)
+  - Radiacao Solar (media das linhas)
+  - Pressao (media das linhas)
+  - Vazao (media das linhas)
+  - Vibracao (pior caso entre as linhas - valor maximo)
+- 3 graficos historicos (uma curva por linha):
   - Temperatura por linha
   - Vibracao por linha
   - Vazao por linha
 - 1 alerta visual:
-  - Alerta de manutencao quando temperatura ou vibracao ultrapassa o limite.
+  - Alerta de manutencao quando temperatura ou vibracao de qualquer linha ultrapassa o limite.
+
+### Por que maximo em uns e media em outros
+
+Com cinco linhas publicando ao mesmo tempo, um unico gauge nao consegue mostrar todas. A escolha foi:
+
+- **Temperatura e Vibracao** mostram o **maximo** entre as linhas, porque sao os indicadores que disparam manutencao. Assim o ponteiro do gauge sempre concorda com o texto de alerta (se o alerta aponta a linha5 a 36 graus, o gauge tambem marca 36).
+- **Umidade, Radiacao, Pressao e Vazao** mostram a **media** das linhas, como valor representativo do conjunto, ja que nao acionam alerta.
+
+O detalhe por linha continua disponivel nos tres graficos historicos, onde cada linha aparece como uma curva separada.
+
+### Robustez
+
+Cada sensor e lido de forma independente. Se uma mensagem chegar sem algum campo, os demais sensores daquela linha continuam sendo processados e o ultimo valor valido e mantido, em vez de descartar a leitura inteira.
 
 ## Como executar no Node-RED
 

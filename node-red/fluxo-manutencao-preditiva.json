@@ -115,7 +115,7 @@
     "type": "function",
     "z": "tab_manutencao_preditiva",
     "name": "Processar indicadores e alerta",
-    "func": "let dados = msg.payload;\nconst linha = (msg.topic || 'sensores/linha?').split('/').pop();\n\nif (Buffer.isBuffer(dados)) {\n    dados = dados.toString('utf8');\n}\n\nif (typeof dados === 'string') {\n    try {\n        dados = JSON.parse(dados);\n    } catch (erro) {\n        node.warn(`Mensagem MQTT invalida em ${msg.topic}: ${dados}`);\n        return null;\n    }\n}\n\nif (!dados || typeof dados !== 'object') {\n    node.warn(`Payload inesperado em ${msg.topic}`);\n    return null;\n}\n\nconst temperatura = Number(dados.temperatura);\nconst umidade = Number(dados.umidade);\nconst radiacao = Number(dados.radiacao);\nconst pressao = Number(dados.pressao);\nconst vazao = Number(dados.vazao);\nconst vibracao = Number(dados.acelerometro);\n\nconst valores = [temperatura, umidade, radiacao, pressao, vazao, vibracao];\nif (valores.some((valor) => !Number.isFinite(valor))) {\n    node.warn(`Dados incompletos em ${msg.topic}: ${JSON.stringify(dados)}`);\n    return null;\n}\n\nconst base = {\n    linha,\n    origem: msg.topic,\n    timestamp: new Date().toISOString()\n};\n\nfunction sensorMsg(valor, topico, unidade) {\n    return {\n        topic: `${linha} - ${topico}`,\n        payload: valor,\n        unidade,\n        ...base\n    };\n}\n\nconst riscoTemperatura = temperatura > 35;\nconst riscoVibracao = vibracao > 4;\nconst emAlerta = riscoTemperatura || riscoVibracao;\n\nlet alerta = `NORMAL | ${linha} | Temperatura: ${temperatura.toFixed(1)} °C | Vibração: ${vibracao.toFixed(2)} g`;\nif (emAlerta) {\n    const motivos = [];\n    if (riscoTemperatura) motivos.push(`temperatura acima de 35 °C (${temperatura.toFixed(1)} °C)`);\n    if (riscoVibracao) motivos.push(`vibração acima de 4 g (${vibracao.toFixed(2)} g)`);\n    alerta = `ALERTA DE MANUTENÇÃO | ${linha} | ${motivos.join(' e ')}`;\n}\n\nconst alertaMsg = {\n    topic: emAlerta ? 'ALERTA' : 'NORMAL',\n    payload: alerta,\n    color: emAlerta ? 'red' : 'green',\n    ...base\n};\n\nconst toastMsg = emAlerta\n    ? { topic: 'Alerta de manutenção preditiva', payload: alerta, ...base }\n    : null;\n\nreturn [\n    sensorMsg(temperatura, 'Temperatura', '°C'),\n    sensorMsg(umidade, 'Umidade', '%'),\n    sensorMsg(radiacao, 'Radiação Solar', 'W/m²'),\n    sensorMsg(pressao, 'Pressão', 'bar'),\n    sensorMsg(vazao, 'Vazão', 'L/min'),\n    sensorMsg(vibracao, 'Vibração', 'g'),\n    sensorMsg(temperatura, 'Temperatura', '°C'),\n    sensorMsg(vibracao, 'Vibração', 'g'),\n    sensorMsg(vazao, 'Vazão', 'L/min'),\n    alertaMsg,\n    toastMsg\n];",
+    "func": "// === Manutencao preditiva - processamento multi-linha ===\n// Mantem o estado de cada linha, agrega entre linhas para os gauges\n// e gera uma serie por linha para os graficos.\n\nlet dados = msg.payload;\nconst linha = (msg.topic || 'sensores/linha?').split('/').pop();\n\nif (typeof dados === 'string') {\n    try {\n        dados = JSON.parse(dados);\n    } catch (erro) {\n        node.warn(`JSON invalido em ${msg.topic}: ${dados}`);\n        return null;\n    }\n}\nif (!dados || typeof dados !== 'object') {\n    node.warn(`Payload inesperado em ${msg.topic}`);\n    return null;\n}\n\n// --- Leitura independente por sensor ---\n// Um sensor ausente/invalido nao descarta os demais: mantem o ultimo valor valido da linha.\nconst estados = context.get('estados') || {};\nconst leitura = estados[linha] ? Object.assign({}, estados[linha].valores) : {};\n\nfunction lerSensor(chave, campo) {\n    const valor = Number(dados[campo]);\n    if (Number.isFinite(valor)) {\n        leitura[chave] = valor;\n    } else {\n        node.warn(`Sensor '${campo}' ausente/invalido em ${msg.topic}`);\n    }\n}\n\nlerSensor('temperatura', 'temperatura');\nlerSensor('umidade', 'umidade');\nlerSensor('radiacao', 'radiacao');\nlerSensor('pressao', 'pressao');\nlerSensor('vazao', 'vazao');\nlerSensor('vibracao', 'acelerometro');\n\nestados[linha] = { valores: leitura, timestamp: new Date().toISOString() };\ncontext.set('estados', estados);\n\nconst linhas = Object.keys(estados);\n\n// --- Agregacao entre linhas ---\n// Temperatura e vibracao: PIOR caso (maximo), pois disparam manutencao.\n// Demais: MEDIA, como valor representativo do parque.\nfunction agregar(chave, modo) {\n    const vals = linhas\n        .map((l) => estados[l].valores[chave])\n        .filter((v) => Number.isFinite(v));\n    if (vals.length === 0) return null;\n    if (modo === 'max') return Math.max.apply(null, vals);\n    return vals.reduce((a, b) => a + b, 0) / vals.length;\n}\n\nconst tempMax = agregar('temperatura', 'max');\nconst vibMax = agregar('vibracao', 'max');\n\nfunction gauge(valor) {\n    return Number.isFinite(valor) ? { payload: Number(valor.toFixed(2)) } : null;\n}\n\nconst gTemp = gauge(tempMax);\nconst gUmid = gauge(agregar('umidade', 'media'));\nconst gRad = gauge(agregar('radiacao', 'media'));\nconst gPres = gauge(agregar('pressao', 'media'));\nconst gVazao = gauge(agregar('vazao', 'media'));\nconst gVib = gauge(vibMax);\n\n// --- Graficos: uma serie por linha (topic = linha) ---\nfunction chart(chave) {\n    const v = leitura[chave];\n    return Number.isFinite(v) ? { topic: linha, payload: v } : null;\n}\n\nconst cTemp = chart('temperatura');\nconst cVib = chart('vibracao');\nconst cVazao = chart('vazao');\n\n// --- Avaliacao de alerta sobre TODAS as linhas ---\nconst linhasAlerta = [];\nfor (const l of linhas) {\n    const v = estados[l].valores;\n    const motivos = [];\n    if (Number.isFinite(v.temperatura) && v.temperatura > 35) {\n        motivos.push(`temperatura ${v.temperatura.toFixed(1)} °C`);\n    }\n    if (Number.isFinite(v.vibracao) && v.vibracao > 4) {\n        motivos.push(`vibração ${v.vibracao.toFixed(2)} g`);\n    }\n    if (motivos.length > 0) {\n        linhasAlerta.push({ linha: l, motivos });\n    }\n}\n\nconst emAlerta = linhasAlerta.length > 0;\nlet texto;\nlet cor;\nif (emAlerta) {\n    cor = 'red';\n    texto = 'ALERTA DE MANUTENÇÃO | ' +\n        linhasAlerta.map((a) => `${a.linha}: ${a.motivos.join(' e ')}`).join('  ||  ');\n} else {\n    cor = 'green';\n    const tMax = Number.isFinite(tempMax) ? tempMax.toFixed(1) : '--';\n    const vMax = Number.isFinite(vibMax) ? vibMax.toFixed(2) : '--';\n    texto = `NORMAL | ${linhas.length} linha(s) | Temp. máx ${tMax} °C | Vib. máx ${vMax} g`;\n}\n\nconst alertaMsg = { topic: emAlerta ? 'ALERTA' : 'NORMAL', payload: texto, color: cor };\n\n// --- Toast apenas na transicao normal -> alerta, por linha ---\nconst alertaPorLinha = context.get('alertaPorLinha') || {};\nconst estaEmAlerta = linhasAlerta.some((a) => a.linha === linha);\nconst estavaEmAlerta = alertaPorLinha[linha] || false;\nlet toastMsg = null;\nif (estaEmAlerta && !estavaEmAlerta) {\n    const info = linhasAlerta.find((a) => a.linha === linha);\n    toastMsg = { topic: 'Manutenção preditiva', payload: `${linha}: ${info.motivos.join(' e ')}` };\n}\nalertaPorLinha[linha] = estaEmAlerta;\ncontext.set('alertaPorLinha', alertaPorLinha);\n\nreturn [gTemp, gUmid, gRad, gPres, gVazao, gVib, cTemp, cVib, cVazao, alertaMsg, toastMsg];\n",
     "outputs": 11,
     "timeout": 0,
     "noerr": 0,
@@ -170,7 +170,7 @@
     "width": 4,
     "height": 4,
     "gtype": "gage",
-    "title": "Temperatura",
+    "title": "Temperatura (máx)",
     "label": "°C",
     "format": "{{value}}",
     "min": 0,
@@ -182,7 +182,9 @@
     ],
     "seg1": "30",
     "seg2": "35",
-    "className": ""
+    "className": "",
+    "x": 920,
+    "y": 60
   },
   {
     "id": "gauge_umidade",
@@ -194,7 +196,7 @@
     "width": 4,
     "height": 4,
     "gtype": "gage",
-    "title": "Umidade",
+    "title": "Umidade (média)",
     "label": "%",
     "format": "{{value}}",
     "min": 0,
@@ -206,7 +208,9 @@
     ],
     "seg1": "70",
     "seg2": "80",
-    "className": ""
+    "className": "",
+    "x": 920,
+    "y": 100
   },
   {
     "id": "gauge_radiacao",
@@ -218,7 +222,7 @@
     "width": 4,
     "height": 4,
     "gtype": "gage",
-    "title": "Radiação Solar",
+    "title": "Radiação Solar (média)",
     "label": "W/m²",
     "format": "{{value}}",
     "min": 0,
@@ -230,7 +234,9 @@
     ],
     "seg1": "700",
     "seg2": "1000",
-    "className": ""
+    "className": "",
+    "x": 920,
+    "y": 140
   },
   {
     "id": "gauge_pressao",
@@ -242,7 +248,7 @@
     "width": 4,
     "height": 4,
     "gtype": "gage",
-    "title": "Pressão",
+    "title": "Pressão (média)",
     "label": "bar",
     "format": "{{value}}",
     "min": 0,
@@ -254,7 +260,9 @@
     ],
     "seg1": "6",
     "seg2": "8",
-    "className": ""
+    "className": "",
+    "x": 920,
+    "y": 180
   },
   {
     "id": "gauge_vazao",
@@ -266,7 +274,7 @@
     "width": 4,
     "height": 4,
     "gtype": "gage",
-    "title": "Vazão",
+    "title": "Vazão (média)",
     "label": "L/min",
     "format": "{{value}}",
     "min": 0,
@@ -278,7 +286,9 @@
     ],
     "seg1": "130",
     "seg2": "160",
-    "className": ""
+    "className": "",
+    "x": 920,
+    "y": 220
   },
   {
     "id": "gauge_vibracao",
@@ -290,7 +300,7 @@
     "width": 4,
     "height": 4,
     "gtype": "gage",
-    "title": "Vibração",
+    "title": "Vibração (máx)",
     "label": "g",
     "format": "{{value}}",
     "min": 0,
@@ -302,7 +312,9 @@
     ],
     "seg1": "3",
     "seg2": "4",
-    "className": ""
+    "className": "",
+    "x": 920,
+    "y": 260
   },
   {
     "id": "chart_temperatura",
@@ -340,7 +352,9 @@
       "#bcbd22"
     ],
     "outputs": 1,
-    "className": ""
+    "className": "",
+    "x": 920,
+    "y": 320
   },
   {
     "id": "chart_vibracao",
@@ -378,7 +392,9 @@
       "#bcbd22"
     ],
     "outputs": 1,
-    "className": ""
+    "className": "",
+    "x": 920,
+    "y": 360
   },
   {
     "id": "chart_vazao",
@@ -416,7 +432,9 @@
       "#bcbd22"
     ],
     "outputs": 1,
-    "className": ""
+    "className": "",
+    "x": 920,
+    "y": 400
   },
   {
     "id": "text_alerta",
@@ -430,7 +448,9 @@
     "label": "Status",
     "format": "<font color=\"{{msg.color}}\"><b>{{msg.payload}}</b></font>",
     "layout": "row-spread",
-    "className": ""
+    "className": "",
+    "x": 920,
+    "y": 460
   },
   {
     "id": "toast_alerta",
@@ -448,7 +468,7 @@
     "topic": "",
     "name": "Popup de alerta",
     "x": 920,
-    "y": 460,
+    "y": 500,
     "wires": []
   }
 ]
